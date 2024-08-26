@@ -8,7 +8,7 @@ body {
 }
 
 canvas {
-    width: calc(100% - 200px); /* Adjust width to make room for the debug menu */
+    width: calc(100% - 250px); /* Adjust width to make room for the debug menu */
     height: 100%;
     float: left;
     display: block;
@@ -16,7 +16,7 @@ canvas {
 }
 
 #debugMenu {
-    width: 200px;
+    width: 250px;
     height: 100vh; /* Ensure it takes the full height of the viewport */
     float: right;
     background-color: #f0f0f0;

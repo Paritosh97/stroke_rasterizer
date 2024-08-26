@@ -10,6 +10,9 @@
     <canvas id="glCanvas"></canvas>
     <div id="debugMenu">
         <h2>Debug Menu</h2>
+        <label for="distanceThreshold">Distance Threshold:</label>
+        <input type="range" id="distanceThreshold" min="1" max="1000" value="100">
+        <span id="distanceThresholdValue">100</span>
         <label for="interpolationMode">Interpolation Mode:</label>
         <select id="interpolationMode">
             <option value="linear">Linear Interpolation (Points)</option>

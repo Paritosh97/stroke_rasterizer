@@ -98,22 +98,49 @@ async function main() {
         render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
     });
     
+    function calculateDistance(sample1, sample2) {
+        const dx = sample2.position[0] - sample1.position[0];
+        const dy = sample2.position[1] - sample1.position[1];
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+    
+    let distanceThreshold = 100; // Default value
+
+    // Update distance threshold when the slider is moved
+    const distanceThresholdSlider = document.getElementById('distanceThreshold');
+    const distanceThresholdValue = document.getElementById('distanceThresholdValue');
+
+    distanceThresholdSlider.addEventListener('input', (event) => {
+        distanceThreshold = parseInt(event.target.value, 10);
+        distanceThresholdValue.textContent = distanceThreshold;
+    });
+
+    function calculateDistance(sample1, sample2) {
+        const dx = sample2.position[0] - sample1.position[0];
+        const dy = sample2.position[1] - sample1.position[1];
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
     canvas.addEventListener('pointermove', (event) => {
         event.preventDefault();
         if (!isDrawing) return;
+        
         const sample = createSample(event, canvas);
-    
-        interpolateSamples(lastSample, sample, 5).forEach(s => {
-            allSamples.push(s);
-            allStrokes[activeStrokeIndex].samples.push(s);
-        });
-    
-        allStrokes[activeStrokeIndex].endIndex = allSamples.length - 1;
-        lastSample = sample;
-        updateSampleList();
-        render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
+        
+        if (calculateDistance(lastSample, sample) > distanceThreshold) {
+            // Add the sample only if it's far enough from the last one
+            interpolateSamples(lastSample, sample, 5).forEach(s => {
+                allSamples.push(s);
+                allStrokes[activeStrokeIndex].samples.push(s);
+            });
+
+            allStrokes[activeStrokeIndex].endIndex = allSamples.length - 1;
+            lastSample = sample;
+            updateSampleList();
+            render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
+        }
     });
-    
+
     canvas.addEventListener('pointerup', (event) => {
         event.preventDefault();
         isDrawing = false;
@@ -156,7 +183,7 @@ function createSample(event, canvas) {
     // Set radius based on pressure (adjust the scaling factor as needed)
     const radius = Math.min(50, 5 + pressure * 45);  // Scales pressure (0 to 1) to radius (5 to 50px)
 
-    return { position: [x, y], radius, color: 0x0000FFFF };  // Blue color for input samples
+    return { position: [x, y], radius, color: 0xFF0000FF };  // Red color for all samples
 }
 
 function interpolateSamples(sample1, sample2, numPoints) {
@@ -353,47 +380,29 @@ function renderTriangleStrip(gl, positionLocation, colorLocation, positionBuffer
 }
 
 function render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer) {
-    // Separate arrays for original samples (blue) and interpolated samples (red)
-    const originalPositions = [];
-    const originalRadii = [];
-    const originalColors = [];
-    const interpolatedPositions = [];
-    const interpolatedRadii = [];
-    const interpolatedColors = [];
+    const positions = [];
+    const radii = [];
+    const colors = [];
 
     allStrokes.forEach(stroke => {
         stroke.samples.forEach(sample => {
-            const isInterpolated = sample.color === 0xFF0000FF; // Check if the sample is red
-            if (isInterpolated) {
-                interpolatedPositions.push(...sample.position);
-                interpolatedRadii.push(sample.radius);
-                interpolatedColors.push(
-                    ((sample.color >> 24) & 0xFF) / 255.0,
-                    ((sample.color >> 16) & 0xFF) / 255.0,
-                    ((sample.color >> 8) & 0xFF) / 255.0,
-                    (sample.color & 0xFF) / 255.0
-                );
-            } else {
-                originalPositions.push(...sample.position);
-                originalRadii.push(sample.radius);
-                originalColors.push(
-                    ((sample.color >> 24) & 0xFF) / 255.0,
-                    ((sample.color >> 16) & 0xFF) / 255.0,
-                    ((sample.color >> 8) & 0xFF) / 255.0,
-                    (sample.color & 0xFF) / 255.0
-                );
-            }
+            positions.push(...sample.position);
+            radii.push(sample.radius);
+            colors.push(
+                ((sample.color >> 24) & 0xFF) / 255.0,
+                ((sample.color >> 16) & 0xFF) / 255.0,
+                ((sample.color >> 8) & 0xFF) / 255.0,
+                (sample.color & 0xFF) / 255.0
+            );
         });
     });
 
+    // Render using the selected interpolation mode
     if (interpolationMode === 'triangleStrip') {
         renderTriangleStrip(gl, positionLocation, colorLocation, positionBuffer, colorBuffer);
     } else {
-        // Render interpolated points (red) first
-        renderPoints(gl, positionLocation, radiusLocation, colorLocation, interpolatedPositions, interpolatedRadii, interpolatedColors, positionBuffer, radiusBuffer, colorBuffer);
-
-        // Render original samples (blue) on top
-        renderPoints(gl, positionLocation, radiusLocation, colorLocation, originalPositions, originalRadii, originalColors, positionBuffer, radiusBuffer, colorBuffer);
+        // Render all points (hollow red circles with blue borders and center dots)
+        renderPoints(gl, positionLocation, radiusLocation, colorLocation, positions, radii, colors, positionBuffer, radiusBuffer, colorBuffer);
     }
 }
 
