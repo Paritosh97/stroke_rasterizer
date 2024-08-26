@@ -1,6 +1,28 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+}
+
 canvas {
-    width: 100%;
+    width: calc(100% - 200px); /* Adjust width to make room for the debug menu */
     height: 100%;
+    float: left;
     display: block;
     touch-action: none;
+}
+
+#debugMenu {
+    width: 200px;
+    height: 100vh; /* Ensure it takes the full height of the viewport */
+    float: right;
+    background-color: #f0f0f0;
+    border-left: 1px solid #ccc;
+    padding: 10px;
+    box-sizing: border-box;
+    overflow-y: auto; /* Enable vertical scrolling */
+}
+
+#strokeList {
+    margin-top: 10px;
 }

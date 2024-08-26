@@ -3,11 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebGL Stroke Rasterizer</title>
+    <title>WebGL Drawing App with Debug Menu</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
     <canvas id="glCanvas"></canvas>
+    <div id="debugMenu">
+        <h3>Debug Menu</h3>
+        <div id="strokeList">
+            <p>No strokes yet.</p>
+        </div>
+    </div>
     <script src="{{ url_for('static', filename='js/shaders.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

@@ -2,6 +2,8 @@ let allSamples = [];
 let allStrokes = [];
 let isDrawing = false;
 let lastSample = null;
+let activeStrokeIndex = -1;
+let strokeEditingMode = false;
 
 function createShader(gl, type, source) {
     const shader = gl.createShader(type);
@@ -65,9 +67,24 @@ async function main() {
     canvas.addEventListener('pointerdown', (event) => {
         event.preventDefault(); // Prevent default back gesture
         isDrawing = true;
-        lastSample = createSample(event, canvas);
-        allSamples.push(lastSample);
-        allStrokes.push({ startIndex: allSamples.length - 1, endIndex: allSamples.length - 1, color: 0xff0000ff, zIndex: 0 });
+        const sample = createSample(event, canvas);
+
+        if (strokeEditingMode && activeStrokeIndex !== -1) {
+            // Add to the currently selected stroke in editing mode
+            lastSample = sample;
+            allSamples.push(sample);
+            allStrokes[activeStrokeIndex].endIndex = allSamples.length - 1;
+            allStrokes[activeStrokeIndex].samples.push(sample);
+        } else {
+            // Create a new stroke
+            lastSample = sample;
+            allSamples.push(sample);
+            allStrokes.push({ startIndex: allSamples.length - 1, endIndex: allSamples.length - 1, samples: [sample], color: 0xff0000ff, zIndex: 0 });
+            activeStrokeIndex = allStrokes.length - 1;
+        }
+
+        updateStrokeList();
+        updateSampleList();
         render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer);
     });
 
@@ -77,10 +94,14 @@ async function main() {
         const sample = createSample(event, canvas);
 
         // Add interpolated points between lastSample and current sample
-        interpolateSamples(lastSample, sample, 5).forEach(s => allSamples.push(s));
-        
-        allStrokes[allStrokes.length - 1].endIndex = allSamples.length - 1;
+        interpolateSamples(lastSample, sample, 5).forEach(s => {
+            allSamples.push(s);
+            allStrokes[activeStrokeIndex].samples.push(s);
+        });
+
+        allStrokes[activeStrokeIndex].endIndex = allSamples.length - 1;
         lastSample = sample;
+        updateSampleList();
         render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer);
     });
 
@@ -88,16 +109,24 @@ async function main() {
         event.preventDefault(); // Prevent default back gesture
         isDrawing = false;
         lastSample = null;
+
+        if (!strokeEditingMode) {
+            activeStrokeIndex = -1; // Reset active stroke index after lifting pen, only if not in editing mode
+        }
     });
 
     canvas.addEventListener('pointercancel', (event) => {
         event.preventDefault(); // Prevent default back gesture
         isDrawing = false;
         lastSample = null;
+
+        if (!strokeEditingMode) {
+            activeStrokeIndex = -1; // Reset active stroke index after lifting pen, only if not in editing mode
+        }
     });
 
     // Resize canvas to fit the window
-    canvas.width = window.innerWidth;
+    canvas.width = window.innerWidth - 200; // Adjust for the debug menu
     canvas.height = window.innerHeight;
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     gl.clearColor(1, 1, 1, 1);
@@ -136,6 +165,93 @@ function interpolateSamples(sample1, sample2, numPoints) {
     return points;
 }
 
+function updateStrokeList() {
+    const strokeListDiv = document.getElementById('strokeList');
+    strokeListDiv.innerHTML = ''; // Clear the list
+
+    if (allStrokes.length === 0) {
+        strokeListDiv.innerHTML = '<p>No strokes yet.</p>';
+        return;
+    }
+
+    allStrokes.forEach((stroke, index) => {
+        const strokeButton = document.createElement('button');
+        strokeButton.textContent = `Stroke ${index + 1}`;
+        strokeButton.style.display = 'block';
+        strokeButton.style.width = '100%';
+        strokeButton.style.marginBottom = '5px';
+
+        if (index === activeStrokeIndex && strokeEditingMode) {
+            strokeButton.style.backgroundColor = '#ddd'; // Highlight active stroke
+        }
+
+        strokeButton.addEventListener('click', () => {
+            activeStrokeIndex = index;
+            strokeEditingMode = true; // Enter stroke editing mode
+            updateStrokeList();
+            updateSampleList();
+        });
+
+        strokeListDiv.appendChild(strokeButton);
+
+        // Create expand/collapse functionality
+        const sampleListDiv = document.createElement('div');
+        sampleListDiv.style.display = 'none';
+        sampleListDiv.style.marginLeft = '10px';
+
+        stroke.samples.forEach((sample, sampleIndex) => {
+            const sampleDiv = document.createElement('div');
+            sampleDiv.textContent = `Sample ${sampleIndex + 1}: Pos(${sample.position[0].toFixed(2)}, ${sample.position[1].toFixed(2)}) Radius: ${sample.radius.toFixed(2)}`;
+            sampleListDiv.appendChild(sampleDiv);
+        });
+
+        strokeButton.addEventListener('click', () => {
+            sampleListDiv.style.display = sampleListDiv.style.display === 'none' ? 'block' : 'none';
+        });
+
+        strokeListDiv.appendChild(sampleListDiv);
+    });
+
+    // Add "+" button to exit editing mode and create a new stroke
+    const newStrokeButton = document.createElement('button');
+    newStrokeButton.textContent = '+ New Stroke';
+    newStrokeButton.style.display = 'block';
+    newStrokeButton.style.width = '100%';
+    newStrokeButton.style.marginTop = '10px';
+    newStrokeButton.addEventListener('click', () => {
+        activeStrokeIndex = -1;
+        strokeEditingMode = false;
+        updateStrokeList();
+    });
+    strokeListDiv.appendChild(newStrokeButton);
+}
+
+function updateSampleList() {
+    const strokeListDiv = document.getElementById('strokeList');
+    if (activeStrokeIndex !== -1) {
+        const sampleListDiv = document.createElement('div');
+        sampleListDiv.style.marginTop = '10px';
+        sampleListDiv.style.padding = '5px';
+        sampleListDiv.style.backgroundColor = '#eee';
+        sampleListDiv.style.border = '1px solid #ccc';
+
+        const samples = allStrokes[activeStrokeIndex].samples;
+
+        if (samples.length > 0) {
+            samples.forEach((sample, sampleIndex) => {
+                const sampleDiv = document.createElement('div');
+                sampleDiv.textContent = `Sample ${sampleIndex + 1}: Pos(${sample.position[0].toFixed(2)}, ${sample.position[1].toFixed(2)}) Radius: ${sample.radius.toFixed(2)}`;
+                sampleDiv.style.marginBottom = '3px';
+                sampleListDiv.appendChild(sampleDiv);
+            });
+        } else {
+            sampleListDiv.innerHTML = '<p>No samples in this stroke.</p>';
+        }
+
+        strokeListDiv.appendChild(sampleListDiv);
+    }
+}
+
 function render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer) {
     // Prepare positions and radii arrays
     const positions = [];
@@ -158,7 +274,7 @@ function render(gl, program, positionLocation, radiusLocation, resolutionLocatio
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(radii), gl.STATIC_DRAW);
 
     // Set color
-    const strokeColor = 0xff0000ff;
+    const strokeColor = activeStrokeIndex === -1 ? 0xff0000ff : allStrokes[activeStrokeIndex].color;
     const r = ((strokeColor >> 24) & 0xFF) / 255.0;
     const g = ((strokeColor >> 16) & 0xFF) / 255.0;
     const b = ((strokeColor >> 8) & 0xFF) / 255.0;
