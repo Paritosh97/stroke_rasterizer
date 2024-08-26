@@ -18,6 +18,11 @@ function createShader(gl, type, source) {
 }
 
 function createProgram(gl, vertexShader, fragmentShader) {
+    if (!vertexShader || !fragmentShader) {
+        console.error("Shader creation failed. Cannot create program.");
+        return null;
+    }
+
     const program = gl.createProgram();
     gl.attachShader(program, vertexShader);
     gl.attachShader(program, fragmentShader);
@@ -63,6 +68,13 @@ async function main() {
     const positionBuffer = gl.createBuffer();
     const radiusBuffer = gl.createBuffer();
     const colorBuffer = gl.createBuffer();
+
+    // Handle interpolation mode change
+    const interpolationDropdown = document.getElementById('interpolationMode');
+    interpolationDropdown.addEventListener('change', (event) => {
+        interpolationMode = event.target.value;
+        render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
+    });
 
     // Event listeners for drawing
     canvas.addEventListener('pointerdown', (event) => {
@@ -254,47 +266,6 @@ function updateSampleList() {
     }
 }
 
-function render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer) {
-    // Separate arrays for original samples (blue) and interpolated samples (red)
-    const originalPositions = [];
-    const originalRadii = [];
-    const originalColors = [];
-    const interpolatedPositions = [];
-    const interpolatedRadii = [];
-    const interpolatedColors = [];
-
-    allStrokes.forEach(stroke => {
-        stroke.samples.forEach(sample => {
-            const isInterpolated = sample.color === 0xFF0000FF; // Check if the sample is red
-            if (isInterpolated) {
-                interpolatedPositions.push(...sample.position);
-                interpolatedRadii.push(sample.radius);
-                interpolatedColors.push(
-                    ((sample.color >> 24) & 0xFF) / 255.0,
-                    ((sample.color >> 16) & 0xFF) / 255.0,
-                    ((sample.color >> 8) & 0xFF) / 255.0,
-                    (sample.color & 0xFF) / 255.0
-                );
-            } else {
-                originalPositions.push(...sample.position);
-                originalRadii.push(sample.radius);
-                originalColors.push(
-                    ((sample.color >> 24) & 0xFF) / 255.0,
-                    ((sample.color >> 16) & 0xFF) / 255.0,
-                    ((sample.color >> 8) & 0xFF) / 255.0,
-                    (sample.color & 0xFF) / 255.0
-                );
-            }
-        });
-    });
-
-    // Render interpolated points (red) first
-    renderPoints(gl, positionLocation, radiusLocation, colorLocation, interpolatedPositions, interpolatedRadii, interpolatedColors, positionBuffer, radiusBuffer, colorBuffer);
-
-    // Render original samples (blue) on top
-    renderPoints(gl, positionLocation, radiusLocation, colorLocation, originalPositions, originalRadii, originalColors, positionBuffer, radiusBuffer, colorBuffer);
-}
-
 function renderPoints(gl, positionLocation, radiusLocation, colorLocation, positions, radii, colors, positionBuffer, radiusBuffer, colorBuffer) {
     if (positions.length === 0) return;
 
@@ -329,5 +300,105 @@ function renderPoints(gl, positionLocation, radiusLocation, colorLocation, posit
     gl.drawArrays(gl.POINTS, 0, positions.length / 2);
 }
 
+function renderTriangleStrip(gl, positionLocation, colorLocation, positionBuffer, colorBuffer) {
+    const positions = [];
+    const colors = [];
+
+    allStrokes.forEach(stroke => {
+        for (let i = stroke.startIndex; i < stroke.endIndex; i++) {
+            const p1 = allSamples[i];
+            const p2 = allSamples[i + 1];
+
+            // Compute positions for triangle strip
+            positions.push(...p1.position);
+            positions.push(...p2.position);
+
+            // Use the color of the first point for both vertices in the strip
+            colors.push(
+                ((p1.color >> 24) & 0xFF) / 255.0,
+                ((p1.color >> 16) & 0xFF) / 255.0,
+                ((p1.color >> 8) & 0xFF) / 255.0,
+                (p1.color & 0xFF) / 255.0
+            );
+            colors.push(
+                ((p2.color >> 24) & 0xFF) / 255.0,
+                ((p2.color >> 16) & 0xFF) / 255.0,
+                ((p2.color >> 8) & 0xFF) / 255.0,
+                (p2.color & 0xFF) / 255.0
+            );
+        }
+    });
+
+    if (positions.length === 0) return;
+
+    // Load positions into buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+    // Load colors into buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
+    // Enable position attribute
+    gl.enableVertexAttribArray(positionLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+    // Enable color attribute
+    gl.enableVertexAttribArray(colorLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.vertexAttribPointer(colorLocation, 4, gl.FLOAT, false, 0, 0);
+
+    // Clear canvas
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // Draw the triangle strip
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, positions.length / 2);
+}
+
+function render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer) {
+    // Separate arrays for original samples (blue) and interpolated samples (red)
+    const originalPositions = [];
+    const originalRadii = [];
+    const originalColors = [];
+    const interpolatedPositions = [];
+    const interpolatedRadii = [];
+    const interpolatedColors = [];
+
+    allStrokes.forEach(stroke => {
+        stroke.samples.forEach(sample => {
+            const isInterpolated = sample.color === 0xFF0000FF; // Check if the sample is red
+            if (isInterpolated) {
+                interpolatedPositions.push(...sample.position);
+                interpolatedRadii.push(sample.radius);
+                interpolatedColors.push(
+                    ((sample.color >> 24) & 0xFF) / 255.0,
+                    ((sample.color >> 16) & 0xFF) / 255.0,
+                    ((sample.color >> 8) & 0xFF) / 255.0,
+                    (sample.color & 0xFF) / 255.0
+                );
+            } else {
+                originalPositions.push(...sample.position);
+                originalRadii.push(sample.radius);
+                originalColors.push(
+                    ((sample.color >> 24) & 0xFF) / 255.0,
+                    ((sample.color >> 16) & 0xFF) / 255.0,
+                    ((sample.color >> 8) & 0xFF) / 255.0,
+                    (sample.color & 0xFF) / 255.0
+                );
+            }
+        });
+    });
+
+    if (interpolationMode === 'triangleStrip') {
+        renderTriangleStrip(gl, positionLocation, colorLocation, positionBuffer, colorBuffer);
+    } else {
+        // Render interpolated points (red) first
+        renderPoints(gl, positionLocation, radiusLocation, colorLocation, interpolatedPositions, interpolatedRadii, interpolatedColors, positionBuffer, radiusBuffer, colorBuffer);
+
+        // Render original samples (blue) on top
+        renderPoints(gl, positionLocation, radiusLocation, colorLocation, originalPositions, originalRadii, originalColors, positionBuffer, radiusBuffer, colorBuffer);
+    }
+}
 
 window.onload = main;

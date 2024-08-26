@@ -9,11 +9,15 @@
 <body>
     <canvas id="glCanvas"></canvas>
     <div id="debugMenu">
-        <h3>Debug Menu</h3>
-        <div id="strokeList">
-            <p>No strokes yet.</p>
-        </div>
-    </div>
+        <h2>Debug Menu</h2>
+        <label for="interpolationMode">Interpolation Mode:</label>
+        <select id="interpolationMode">
+            <option value="linear">Linear Interpolation (Points)</option>
+            <option value="triangleStrip">Triangle Strip Interpolation</option>
+            <!-- Add more options here if needed -->
+        </select>
+        <div id="strokeList"></div>
+    </div>    
     <script src="{{ url_for('static', filename='js/shaders.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
