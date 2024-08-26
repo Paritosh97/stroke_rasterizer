@@ -56,12 +56,13 @@ async function main() {
     // Look up attribute and uniform locations
     const positionLocation = gl.getAttribLocation(program, 'a_position');
     const radiusLocation = gl.getAttribLocation(program, 'a_radius');
+    const colorLocation = gl.getAttribLocation(program, 'a_color');
     const resolutionLocation = gl.getUniformLocation(program, 'u_resolution');
-    const colorLocation = gl.getUniformLocation(program, 'u_color');
 
-    // Create buffers for positions and radii
+    // Create buffers for positions, radii, and colors
     const positionBuffer = gl.createBuffer();
     const radiusBuffer = gl.createBuffer();
+    const colorBuffer = gl.createBuffer();
 
     // Event listeners for drawing
     canvas.addEventListener('pointerdown', (event) => {
@@ -85,7 +86,7 @@ async function main() {
 
         updateStrokeList();
         updateSampleList();
-        render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer);
+        render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
     });
 
     canvas.addEventListener('pointermove', (event) => {
@@ -102,7 +103,7 @@ async function main() {
         allStrokes[activeStrokeIndex].endIndex = allSamples.length - 1;
         lastSample = sample;
         updateSampleList();
-        render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer);
+        render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
     });
 
     canvas.addEventListener('pointerup', (event) => {
@@ -147,7 +148,7 @@ function createSample(event, canvas) {
     // Set radius based on pressure (adjust the scaling factor as needed)
     const radius = Math.min(50, 5 + pressure * 45);  // Scales pressure (0 to 1) to radius (5 to 50px)
 
-    return { position: [x, y], radius };
+    return { position: [x, y], radius, color: 0x0000FFFF };  // Blue color for input samples
 }
 
 function interpolateSamples(sample1, sample2, numPoints) {
@@ -159,7 +160,8 @@ function interpolateSamples(sample1, sample2, numPoints) {
     for (let i = 1; i <= numPoints; i++) {
         points.push({
             position: [sample1.position[0] + i * dx, sample1.position[1] + i * dy],
-            radius: sample1.radius + i * dr
+            radius: sample1.radius + i * dr,
+            color: 0xFF0000FF  // Red color for interpolated samples
         });
     }
     return points;
@@ -252,16 +254,26 @@ function updateSampleList() {
     }
 }
 
-function render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer) {
-    // Prepare positions and radii arrays
+function render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer) {
+    // Prepare positions, radii, and colors arrays
     const positions = [];
     const radii = [];
+    const colors = [];
 
     allStrokes.forEach(stroke => {
         for (let i = stroke.startIndex; i <= stroke.endIndex; i++) {
             const sample = allSamples[i];
             positions.push(...sample.position);
             radii.push(sample.radius);
+
+            // Extract RGBA color components
+            const color = sample.color;
+            colors.push(
+                ((color >> 24) & 0xFF) / 255.0,
+                ((color >> 16) & 0xFF) / 255.0,
+                ((color >> 8) & 0xFF) / 255.0,
+                (color & 0xFF) / 255.0
+            );
         }
     });
 
@@ -273,13 +285,9 @@ function render(gl, program, positionLocation, radiusLocation, resolutionLocatio
     gl.bindBuffer(gl.ARRAY_BUFFER, radiusBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(radii), gl.STATIC_DRAW);
 
-    // Set color
-    const strokeColor = activeStrokeIndex === -1 ? 0xff0000ff : allStrokes[activeStrokeIndex].color;
-    const r = ((strokeColor >> 24) & 0xFF) / 255.0;
-    const g = ((strokeColor >> 16) & 0xFF) / 255.0;
-    const b = ((strokeColor >> 8) & 0xFF) / 255.0;
-    const a = (strokeColor & 0xFF) / 255.0;
-    gl.uniform4f(colorLocation, r, g, b, a);
+    // Load colors into buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
 
     // Enable position attribute
     gl.enableVertexAttribArray(positionLocation);
@@ -290,6 +298,11 @@ function render(gl, program, positionLocation, radiusLocation, resolutionLocatio
     gl.enableVertexAttribArray(radiusLocation);
     gl.bindBuffer(gl.ARRAY_BUFFER, radiusBuffer);
     gl.vertexAttribPointer(radiusLocation, 1, gl.FLOAT, false, 0, 0);
+
+    // Enable color attribute
+    gl.enableVertexAttribArray(colorLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.vertexAttribPointer(colorLocation, 4, gl.FLOAT, false, 0, 0);
 
     // Clear canvas
     gl.clear(gl.COLOR_BUFFER_BIT);

@@ -1,7 +1,9 @@
 attribute vec2 a_position;
 attribute float a_radius;
+attribute vec4 a_color;
 uniform vec2 u_resolution;
 varying float v_radius;
+varying vec4 v_color;
 
 void main() {
     // Convert the position from pixels to normalized device coordinates
@@ -11,5 +13,6 @@ void main() {
 
     gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
     v_radius = a_radius / u_resolution.x;  // Adjust radius by resolution for consistent appearance
+    v_color = a_color;  // Pass the color to the fragment shader
     gl_PointSize = a_radius * 2.0;
 }
