@@ -326,29 +326,87 @@ function renderPoints(gl, positionLocation, radiusLocation, colorLocation, posit
 function renderTriangleStrip(gl, positionLocation, colorLocation, positionBuffer, colorBuffer) {
     const positions = [];
     const colors = [];
+    const circleSegments = 16; // Number of segments to approximate a circle
 
     allStrokes.forEach(stroke => {
-        for (let i = stroke.startIndex; i < stroke.endIndex; i++) {
-            const p1 = allSamples[i];
-            const p2 = allSamples[i + 1];
+        for (let i = stroke.startIndex; i <= stroke.endIndex; i++) {
+            const sample = allSamples[i];
+            const { position, radius, color } = sample;
 
-            // Compute positions for triangle strip
-            positions.push(...p1.position);
-            positions.push(...p2.position);
+            // 1. Create a circle (approximated by a polygon) around each point
+            for (let j = 0; j < circleSegments; j++) {
+                const theta = (j / circleSegments) * 2.0 * Math.PI;
+                const nextTheta = ((j + 1) / circleSegments) * 2.0 * Math.PI;
 
-            // Use the color of the first point for both vertices in the strip
-            colors.push(
-                ((p1.color >> 24) & 0xFF) / 255.0,
-                ((p1.color >> 16) & 0xFF) / 255.0,
-                ((p1.color >> 8) & 0xFF) / 255.0,
-                (p1.color & 0xFF) / 255.0
-            );
-            colors.push(
-                ((p2.color >> 24) & 0xFF) / 255.0,
-                ((p2.color >> 16) & 0xFF) / 255.0,
-                ((p2.color >> 8) & 0xFF) / 255.0,
-                (p2.color & 0xFF) / 255.0
-            );
+                const x1 = position[0] + radius * Math.cos(theta);
+                const y1 = position[1] + radius * Math.sin(theta);
+                const x2 = position[0] + radius * Math.cos(nextTheta);
+                const y2 = position[1] + radius * Math.sin(nextTheta);
+
+                // Central vertex
+                positions.push(...position);
+                // Edge vertices
+                positions.push(x1, y1);
+                positions.push(x2, y2);
+
+                // Push the same color for all vertices
+                for (let k = 0; k < 3; k++) {
+                    colors.push(
+                        ((color >> 24) & 0xFF) / 255.0,
+                        ((color >> 16) & 0xFF) / 255.0,
+                        ((color >> 8) & 0xFF) / 255.0,
+                        (color & 0xFF) / 255.0
+                    );
+                }
+            }
+
+            // 2. Create a strip between this point and the next point, if there is a next point
+            if (i < stroke.endIndex) {
+                const nextSample = allSamples[i + 1];
+                const { position: nextPosition, color: nextColor } = nextSample;
+
+                // Find the direction vector from the current to the next point
+                const dir = [
+                    nextPosition[0] - position[0],
+                    nextPosition[1] - position[1]
+                ];
+                const length = Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1]);
+                const normalizedDir = [dir[0] / length, dir[1] / length];
+
+                // Find the perpendicular vector
+                const perpDir = [-normalizedDir[1], normalizedDir[0]];
+
+                // Create two vertices for the strip at the current point
+                const v1 = [
+                    position[0] + perpDir[0] * radius,
+                    position[1] + perpDir[1] * radius
+                ];
+                const v2 = [
+                    position[0] - perpDir[0] * radius,
+                    position[1] - perpDir[1] * radius
+                ];
+
+                // Create two vertices for the strip at the next point
+                const v3 = [
+                    nextPosition[0] + perpDir[0] * radius,
+                    nextPosition[1] + perpDir[1] * radius
+                ];
+                const v4 = [
+                    nextPosition[0] - perpDir[0] * radius,
+                    nextPosition[1] - perpDir[1] * radius
+                ];
+
+                // Add these to the positions and colors arrays
+                positions.push(...v1, ...v3, ...v2, ...v4);
+                for (let k = 0; k < 4; k++) {
+                    colors.push(
+                        ((color >> 24) & 0xFF) / 255.0,
+                        ((color >> 16) & 0xFF) / 255.0,
+                        ((color >> 8) & 0xFF) / 255.0,
+                        (color & 0xFF) / 255.0
+                    );
+                }
+            }
         }
     });
 
@@ -376,7 +434,7 @@ function renderTriangleStrip(gl, positionLocation, colorLocation, positionBuffer
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     // Draw the triangle strip
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, positions.length / 2);
+    gl.drawArrays(gl.TRIANGLES, 0, positions.length / 2);
 }
 
 function render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer) {
