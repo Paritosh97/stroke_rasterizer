@@ -255,27 +255,48 @@ function updateSampleList() {
 }
 
 function render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer) {
-    // Prepare positions, radii, and colors arrays
-    const positions = [];
-    const radii = [];
-    const colors = [];
+    // Separate arrays for original samples (blue) and interpolated samples (red)
+    const originalPositions = [];
+    const originalRadii = [];
+    const originalColors = [];
+    const interpolatedPositions = [];
+    const interpolatedRadii = [];
+    const interpolatedColors = [];
 
     allStrokes.forEach(stroke => {
-        for (let i = stroke.startIndex; i <= stroke.endIndex; i++) {
-            const sample = allSamples[i];
-            positions.push(...sample.position);
-            radii.push(sample.radius);
-
-            // Extract RGBA color components
-            const color = sample.color;
-            colors.push(
-                ((color >> 24) & 0xFF) / 255.0,
-                ((color >> 16) & 0xFF) / 255.0,
-                ((color >> 8) & 0xFF) / 255.0,
-                (color & 0xFF) / 255.0
-            );
-        }
+        stroke.samples.forEach(sample => {
+            const isInterpolated = sample.color === 0xFF0000FF; // Check if the sample is red
+            if (isInterpolated) {
+                interpolatedPositions.push(...sample.position);
+                interpolatedRadii.push(sample.radius);
+                interpolatedColors.push(
+                    ((sample.color >> 24) & 0xFF) / 255.0,
+                    ((sample.color >> 16) & 0xFF) / 255.0,
+                    ((sample.color >> 8) & 0xFF) / 255.0,
+                    (sample.color & 0xFF) / 255.0
+                );
+            } else {
+                originalPositions.push(...sample.position);
+                originalRadii.push(sample.radius);
+                originalColors.push(
+                    ((sample.color >> 24) & 0xFF) / 255.0,
+                    ((sample.color >> 16) & 0xFF) / 255.0,
+                    ((sample.color >> 8) & 0xFF) / 255.0,
+                    (sample.color & 0xFF) / 255.0
+                );
+            }
+        });
     });
+
+    // Render interpolated points (red) first
+    renderPoints(gl, positionLocation, radiusLocation, colorLocation, interpolatedPositions, interpolatedRadii, interpolatedColors, positionBuffer, radiusBuffer, colorBuffer);
+
+    // Render original samples (blue) on top
+    renderPoints(gl, positionLocation, radiusLocation, colorLocation, originalPositions, originalRadii, originalColors, positionBuffer, radiusBuffer, colorBuffer);
+}
+
+function renderPoints(gl, positionLocation, radiusLocation, colorLocation, positions, radii, colors, positionBuffer, radiusBuffer, colorBuffer) {
+    if (positions.length === 0) return;
 
     // Load positions into buffer
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -304,11 +325,9 @@ function render(gl, program, positionLocation, radiusLocation, resolutionLocatio
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.vertexAttribPointer(colorLocation, 4, gl.FLOAT, false, 0, 0);
 
-    // Clear canvas
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
     // Draw the points
     gl.drawArrays(gl.POINTS, 0, positions.length / 2);
 }
+
 
 window.onload = main;
