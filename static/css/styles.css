@@ -2,6 +2,9 @@ body {
     margin: 0;
     overflow: hidden;
     font-family: Arial, sans-serif;
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10+ and Edge */
+    user-select: none; /* Standard syntax */
 }
 
 canvas {
@@ -9,7 +12,7 @@ canvas {
     height: 100%;
     float: left;
     display: block;
-    touch-action: none;
+    touch-action: none; /* Prevent touch gestures on the canvas */
 }
 
 #debugMenu {
@@ -21,6 +24,9 @@ canvas {
     padding: 10px;
     box-sizing: border-box;
     overflow-y: auto; /* Enable vertical scrolling */
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10+ and Edge */
+    user-select: none; /* Standard syntax */
 }
 
 #strokeList {

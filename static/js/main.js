@@ -76,67 +76,63 @@ async function main() {
         render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
     });
 
-    // Event listeners for drawing
     canvas.addEventListener('pointerdown', (event) => {
-        event.preventDefault(); // Prevent default back gesture
+        event.preventDefault();
         isDrawing = true;
         const sample = createSample(event, canvas);
-
+    
         if (strokeEditingMode && activeStrokeIndex !== -1) {
-            // Add to the currently selected stroke in editing mode
             lastSample = sample;
             allSamples.push(sample);
             allStrokes[activeStrokeIndex].endIndex = allSamples.length - 1;
             allStrokes[activeStrokeIndex].samples.push(sample);
         } else {
-            // Create a new stroke
             lastSample = sample;
             allSamples.push(sample);
             allStrokes.push({ startIndex: allSamples.length - 1, endIndex: allSamples.length - 1, samples: [sample], color: 0xff0000ff, zIndex: 0 });
             activeStrokeIndex = allStrokes.length - 1;
         }
-
+    
         updateStrokeList();
         updateSampleList();
         render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
     });
-
+    
     canvas.addEventListener('pointermove', (event) => {
-        event.preventDefault(); // Prevent default back gesture
+        event.preventDefault();
         if (!isDrawing) return;
         const sample = createSample(event, canvas);
-
-        // Add interpolated points between lastSample and current sample
+    
         interpolateSamples(lastSample, sample, 5).forEach(s => {
             allSamples.push(s);
             allStrokes[activeStrokeIndex].samples.push(s);
         });
-
+    
         allStrokes[activeStrokeIndex].endIndex = allSamples.length - 1;
         lastSample = sample;
         updateSampleList();
         render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
     });
-
+    
     canvas.addEventListener('pointerup', (event) => {
-        event.preventDefault(); // Prevent default back gesture
+        event.preventDefault();
         isDrawing = false;
         lastSample = null;
-
+    
         if (!strokeEditingMode) {
-            activeStrokeIndex = -1; // Reset active stroke index after lifting pen, only if not in editing mode
+            activeStrokeIndex = -1;
         }
     });
-
+    
     canvas.addEventListener('pointercancel', (event) => {
-        event.preventDefault(); // Prevent default back gesture
+        event.preventDefault();
         isDrawing = false;
         lastSample = null;
-
+    
         if (!strokeEditingMode) {
-            activeStrokeIndex = -1; // Reset active stroke index after lifting pen, only if not in editing mode
+            activeStrokeIndex = -1;
         }
-    });
+    });    
 
     // Resize canvas to fit the window
     canvas.width = window.innerWidth - 200; // Adjust for the debug menu
