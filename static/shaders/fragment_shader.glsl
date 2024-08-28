@@ -1,4 +1,6 @@
 precision mediump float;
+varying vec4 v_color;
+varying float v_radius;
 
 void main() {
     // Calculate distance from the center of the point/quad
@@ -15,13 +17,13 @@ void main() {
         discard;  // Discard fragments outside the point's radius
     } else if (dist > (1.0 - borderThickness)) {
         // Blue border
-        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);  // Blue color
+        gl_FragColor = v_color;  // Use the color passed from the vertex shader
     } else if (dist < dotSize) {
         // Blue dot in the center
-        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);  // Blue color
+        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);  // Blue color for the dot
     } else {
-        // Make the inside of the shape red
-        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);  // Red color
+        // Hollow inside (transparent)
+        discard;  // Make the inside of the shape transparent
     }
 
     // Apply anti-aliasing to smooth edges

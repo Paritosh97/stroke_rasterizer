@@ -358,10 +358,10 @@ function interpolateStroke(stroke, numSegments) {
 
     return interpolatedPoints;
 }
-
 function renderInterpolatedCurve(gl, positionLocation, colorLocation, positionBuffer, colorBuffer) {
     const positions = [];
     const colors = [];
+    const color = [1.0, 0.0, 0.0, 1.0];
 
     allStrokes.forEach((stroke, strokeIndex) => {
         const interpolatedPoints = interpolateStroke(stroke, 20);
@@ -378,13 +378,12 @@ function renderInterpolatedCurve(gl, positionLocation, colorLocation, positionBu
             if (length === 0) continue;  // Skip zero-length segments
 
             const normalizedDir = [direction[0] / length, direction[1] / length];
-
             const perpDir = [-normalizedDir[1], normalizedDir[0]];
 
             const currentRadius = currentPoint.radius;
             const nextRadius = nextPoint.radius;
 
-            // Adjusted vertex generation to handle sharp turns
+            // Calculate vertices around the curve segment
             const v1 = [
                 currentPoint.position[0] + perpDir[0] * currentRadius,
                 currentPoint.position[1] + perpDir[1] * currentRadius
@@ -403,17 +402,13 @@ function renderInterpolatedCurve(gl, positionLocation, colorLocation, positionBu
                 nextPoint.position[1] - perpDir[1] * nextRadius
             ];
 
-            // To prevent overlapping, adjust the vertex positions if they intersect
-            // Use a small adjustment factor
-            const adjustmentFactor = 0.01;
-            if (Math.abs(v1[0] - v3[0]) < adjustmentFactor && Math.abs(v1[1] - v3[1]) < adjustmentFactor) {
-                v1[0] += perpDir[0] * adjustmentFactor;
-                v1[1] += perpDir[1] * adjustmentFactor;
-                v3[0] -= perpDir[0] * adjustmentFactor;
-                v3[1] -= perpDir[1] * adjustmentFactor;
-            }
-
+            // Push the vertices to form two triangles for the quad
             positions.push(...v1, ...v3, ...v2, ...v4);
+
+            // Add colors for each vertex
+            for (let j = 0; j < 4; j++) {
+                colors.push(...color);
+            }
         }
 
         // Insert degenerate triangles to separate this stroke from the next
@@ -455,11 +450,13 @@ function renderSamples(gl, positionLocation, radiusLocation, colorLocation, posi
     const positions = [];
     const radii = [];
     const colors = [];
+    const color = [0.0, 0.0, 1.0, 1.0];  // Blue color for the samples
 
     allStrokes.forEach(stroke => {
         stroke.samples.forEach(sample => {
             positions.push(...sample.position);
             radii.push(sample.radius);
+            colors.push(...color);
         });
     });
 
