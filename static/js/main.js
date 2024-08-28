@@ -183,7 +183,7 @@ function createSample(event, canvas) {
     // Set radius based on pressure (adjust the scaling factor as needed)
     const radius = Math.min(50, 5 + pressure * 45);  // Scales pressure (0 to 1) to radius (5 to 50px)
 
-    return { position: [x, y], radius, color: 0xFF0000FF };  // Red color for all samples
+    return { position: [x, y], radius, color: 0xFF0000FF };
 }
 
 function interpolateSamples(sample1, sample2, numPoints) {
@@ -196,7 +196,7 @@ function interpolateSamples(sample1, sample2, numPoints) {
         points.push({
             position: [sample1.position[0] + i * dx, sample1.position[1] + i * dy],
             radius: sample1.radius + i * dr,
-            color: 0xFF0000FF  // Red color for interpolated samples
+            color: 0xFF0000FF
         });
     }
     return points;
@@ -323,90 +323,110 @@ function renderPoints(gl, positionLocation, radiusLocation, colorLocation, posit
     gl.drawArrays(gl.POINTS, 0, positions.length / 2);
 }
 
-function renderTriangleStrip(gl, positionLocation, colorLocation, positionBuffer, colorBuffer) {
+function catmullRomInterpolate(p0, p1, p2, p3, t) {
+    const t2 = t * t;
+    const t3 = t2 * t;
+
+    return [
+        0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
+        0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3)
+    ];
+}
+
+
+function interpolateStroke(stroke, numSegments) {
+    const interpolatedPoints = [];
+
+    const samples = stroke.samples;
+    if (samples.length < 2) return interpolatedPoints;
+
+    for (let i = 0; i < samples.length - 1; i++) {
+        const p0 = samples[i === 0 ? i : i - 1].position;
+        const p1 = samples[i].position;
+        const p2 = samples[i + 1].position;
+        const p3 = samples[i + 1 === samples.length - 1 ? i + 1 : i + 2].position;
+
+        for (let t = 0; t < numSegments; t++) {
+            const tNorm = t / numSegments;
+            const interpolatedPosition = catmullRomInterpolate(p0, p1, p2, p3, tNorm);
+            const interpolatedRadius = samples[i].radius + tNorm * (samples[i + 1].radius - samples[i].radius);
+            interpolatedPoints.push({ position: interpolatedPosition, radius: interpolatedRadius });
+        }
+    }
+
+    interpolatedPoints.push({ position: samples[samples.length - 1].position, radius: samples[samples.length - 1].radius });
+
+    return interpolatedPoints;
+}
+
+function renderInterpolatedCurve(gl, positionLocation, colorLocation, positionBuffer, colorBuffer) {
     const positions = [];
     const colors = [];
-    const circleSegments = 16; // Number of segments to approximate a circle
+    const redColor = [1.0, 0.0, 0.0, 1.0];  // Red color for the curve
 
-    allStrokes.forEach(stroke => {
-        for (let i = stroke.startIndex; i <= stroke.endIndex; i++) {
-            const sample = allSamples[i];
-            const { position, radius, color } = sample;
+    allStrokes.forEach((stroke, strokeIndex) => {
+        const interpolatedPoints = interpolateStroke(stroke, 20);
 
-            // 1. Create a circle (approximated by a polygon) around each point
-            for (let j = 0; j < circleSegments; j++) {
-                const theta = (j / circleSegments) * 2.0 * Math.PI;
-                const nextTheta = ((j + 1) / circleSegments) * 2.0 * Math.PI;
+        for (let i = 0; i < interpolatedPoints.length - 1; i++) {
+            const currentPoint = interpolatedPoints[i];
+            const nextPoint = interpolatedPoints[i + 1];
 
-                const x1 = position[0] + radius * Math.cos(theta);
-                const y1 = position[1] + radius * Math.sin(theta);
-                const x2 = position[0] + radius * Math.cos(nextTheta);
-                const y2 = position[1] + radius * Math.sin(nextTheta);
+            const direction = [
+                nextPoint.position[0] - currentPoint.position[0],
+                nextPoint.position[1] - currentPoint.position[1]
+            ];
+            const length = Math.sqrt(direction[0] * direction[0] + direction[1] * direction[1]);
+            if (length === 0) continue;  // Skip zero-length segments
 
-                // Central vertex
-                positions.push(...position);
-                // Edge vertices
-                positions.push(x1, y1);
-                positions.push(x2, y2);
+            const normalizedDir = [direction[0] / length, direction[1] / length];
 
-                // Push the same color for all vertices
-                for (let k = 0; k < 3; k++) {
-                    colors.push(
-                        ((color >> 24) & 0xFF) / 255.0,
-                        ((color >> 16) & 0xFF) / 255.0,
-                        ((color >> 8) & 0xFF) / 255.0,
-                        (color & 0xFF) / 255.0
-                    );
-                }
+            const perpDir = [-normalizedDir[1], normalizedDir[0]];
+
+            const currentRadius = currentPoint.radius;
+            const nextRadius = nextPoint.radius;
+
+            // Adjusted vertex generation to handle sharp turns
+            const v1 = [
+                currentPoint.position[0] + perpDir[0] * currentRadius,
+                currentPoint.position[1] + perpDir[1] * currentRadius
+            ];
+            const v2 = [
+                currentPoint.position[0] - perpDir[0] * currentRadius,
+                currentPoint.position[1] - perpDir[1] * currentRadius
+            ];
+
+            const v3 = [
+                nextPoint.position[0] + perpDir[0] * nextRadius,
+                nextPoint.position[1] + perpDir[1] * nextRadius
+            ];
+            const v4 = [
+                nextPoint.position[0] - perpDir[0] * nextRadius,
+                nextPoint.position[1] - perpDir[1] * nextRadius
+            ];
+
+            // To prevent overlapping, adjust the vertex positions if they intersect
+            // Use a small adjustment factor
+            const adjustmentFactor = 0.01;
+            if (Math.abs(v1[0] - v3[0]) < adjustmentFactor && Math.abs(v1[1] - v3[1]) < adjustmentFactor) {
+                v1[0] += perpDir[0] * adjustmentFactor;
+                v1[1] += perpDir[1] * adjustmentFactor;
+                v3[0] -= perpDir[0] * adjustmentFactor;
+                v3[1] -= perpDir[1] * adjustmentFactor;
             }
 
-            // 2. Create a strip between this point and the next point, if there is a next point
-            if (i < stroke.endIndex) {
-                const nextSample = allSamples[i + 1];
-                const { position: nextPosition, color: nextColor } = nextSample;
+            positions.push(...v1, ...v3, ...v2, ...v4);
 
-                // Find the direction vector from the current to the next point
-                const dir = [
-                    nextPosition[0] - position[0],
-                    nextPosition[1] - position[1]
-                ];
-                const length = Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1]);
-                const normalizedDir = [dir[0] / length, dir[1] / length];
-
-                // Find the perpendicular vector
-                const perpDir = [-normalizedDir[1], normalizedDir[0]];
-
-                // Create two vertices for the strip at the current point
-                const v1 = [
-                    position[0] + perpDir[0] * radius,
-                    position[1] + perpDir[1] * radius
-                ];
-                const v2 = [
-                    position[0] - perpDir[0] * radius,
-                    position[1] - perpDir[1] * radius
-                ];
-
-                // Create two vertices for the strip at the next point
-                const v3 = [
-                    nextPosition[0] + perpDir[0] * radius,
-                    nextPosition[1] + perpDir[1] * radius
-                ];
-                const v4 = [
-                    nextPosition[0] - perpDir[0] * radius,
-                    nextPosition[1] - perpDir[1] * radius
-                ];
-
-                // Add these to the positions and colors arrays
-                positions.push(...v1, ...v3, ...v2, ...v4);
-                for (let k = 0; k < 4; k++) {
-                    colors.push(
-                        ((color >> 24) & 0xFF) / 255.0,
-                        ((color >> 16) & 0xFF) / 255.0,
-                        ((color >> 8) & 0xFF) / 255.0,
-                        (color & 0xFF) / 255.0
-                    );
-                }
+            // Add colors for each vertex
+            for (let j = 0; j < 4; j++) {
+                colors.push(...redColor);
             }
+        }
+
+        // Insert degenerate triangles to separate this stroke from the next
+        if (strokeIndex < allStrokes.length - 1) {
+            const lastPos = positions.slice(-2); // Last position added
+            positions.push(...lastPos, ...lastPos); // Add twice to make a degenerate triangle
+            colors.push(0, 0, 0, 0, 0, 0, 0, 0); // Invisible color for degenerate triangle
         }
     });
 
@@ -430,37 +450,66 @@ function renderTriangleStrip(gl, positionLocation, colorLocation, positionBuffer
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.vertexAttribPointer(colorLocation, 4, gl.FLOAT, false, 0, 0);
 
-    // Clear canvas
+    // Clear the canvas
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    // Draw the triangle strip
-    gl.drawArrays(gl.TRIANGLES, 0, positions.length / 2);
+    // Draw the quads as triangle strips
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, positions.length / 2);
 }
 
-function render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer) {
+function renderSamples(gl, positionLocation, radiusLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer) {
     const positions = [];
     const radii = [];
     const colors = [];
+    const blueColor = [0.0, 0.0, 1.0, 1.0];  // Blue color for the samples
 
     allStrokes.forEach(stroke => {
         stroke.samples.forEach(sample => {
             positions.push(...sample.position);
             radii.push(sample.radius);
-            colors.push(
-                ((sample.color >> 24) & 0xFF) / 255.0,
-                ((sample.color >> 16) & 0xFF) / 255.0,
-                ((sample.color >> 8) & 0xFF) / 255.0,
-                (sample.color & 0xFF) / 255.0
-            );
+            colors.push(...blueColor);  // Blue color for each sample
         });
     });
 
-    // Render using the selected interpolation mode
-    if (interpolationMode === 'triangleStrip') {
-        renderTriangleStrip(gl, positionLocation, colorLocation, positionBuffer, colorBuffer);
+    if (positions.length === 0) return;
+
+    // Load positions into buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+    // Load radii into buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, radiusBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(radii), gl.STATIC_DRAW);
+
+    // Load colors into buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
+    // Enable position attribute
+    gl.enableVertexAttribArray(positionLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+    // Enable radius attribute
+    gl.enableVertexAttribArray(radiusLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, radiusBuffer);
+    gl.vertexAttribPointer(radiusLocation, 1, gl.FLOAT, false, 0, 0);
+
+    // Enable color attribute
+    gl.enableVertexAttribArray(colorLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.vertexAttribPointer(colorLocation, 4, gl.FLOAT, false, 0, 0);
+
+    // Draw the points (samples)
+    gl.drawArrays(gl.POINTS, 0, positions.length / 2);
+}
+
+function render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer) {
+    if (interpolationMode === 'smoothCurve') {
+        renderInterpolatedCurve(gl, positionLocation, colorLocation, positionBuffer, colorBuffer);
+        renderSamples(gl, positionLocation, radiusLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
     } else {
-        // Render all points (hollow red circles with blue borders and center dots)
-        renderPoints(gl, positionLocation, radiusLocation, colorLocation, positions, radii, colors, positionBuffer, radiusBuffer, colorBuffer);
+        renderSamples(gl, positionLocation, radiusLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
     }
 }
 
