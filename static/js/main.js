@@ -362,7 +362,6 @@ function interpolateStroke(stroke, numSegments) {
 function renderInterpolatedCurve(gl, positionLocation, colorLocation, positionBuffer, colorBuffer) {
     const positions = [];
     const colors = [];
-    const redColor = [1.0, 0.0, 0.0, 1.0];  // Red color for the curve
 
     allStrokes.forEach((stroke, strokeIndex) => {
         const interpolatedPoints = interpolateStroke(stroke, 20);
@@ -415,11 +414,6 @@ function renderInterpolatedCurve(gl, positionLocation, colorLocation, positionBu
             }
 
             positions.push(...v1, ...v3, ...v2, ...v4);
-
-            // Add colors for each vertex
-            for (let j = 0; j < 4; j++) {
-                colors.push(...redColor);
-            }
         }
 
         // Insert degenerate triangles to separate this stroke from the next
@@ -461,13 +455,11 @@ function renderSamples(gl, positionLocation, radiusLocation, colorLocation, posi
     const positions = [];
     const radii = [];
     const colors = [];
-    const blueColor = [0.0, 0.0, 1.0, 1.0];  // Blue color for the samples
 
     allStrokes.forEach(stroke => {
         stroke.samples.forEach(sample => {
             positions.push(...sample.position);
             radii.push(sample.radius);
-            colors.push(...blueColor);  // Blue color for each sample
         });
     });
 
