@@ -10,17 +10,30 @@
     <canvas id="glCanvas"></canvas>
     <div id="debugMenu">
         <h2>Debug Menu</h2>
+    
+        <!-- Distance Threshold Control -->
         <label for="distanceThreshold">Distance Threshold:</label>
         <input type="range" id="distanceThreshold" min="1" max="1000" value="100">
         <span id="distanceThresholdValue">100</span>
-        <label for="interpolationMode">Interpolation Mode:</label>
+    
+        <!-- Radius Control -->
+        <div style="margin-top: 10px;"> <!-- Added a new div to ensure it's on the next line -->
+            <label for="radiusControl">Radius:</label>
+            <input type="range" id="radiusControl" min="0.01" max="5" value="5">
+            <span id="radiusValue">5</span>
+        </div>
+    
+        <!-- Interpolation Mode Control -->
+        <label for="interpolationMode" style="display: block; margin-top: 10px;">Interpolation Mode:</label>
         <select id="interpolationMode">
             <option value="points">Points</option>
             <option value="smoothCurve">Smooth Curve</option>
             <!-- Add more options here if needed -->
         </select>
-        <div id="strokeList"></div>
-    </div>    
+    
+        <div id="strokeList" style="margin-top: 10px;"></div>
+    </div>
+    
     <script src="{{ url_for('static', filename='js/shaders.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

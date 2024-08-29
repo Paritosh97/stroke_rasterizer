@@ -7,26 +7,26 @@ void main() {
     vec2 coord = gl_PointCoord - vec2(0.5); // Center the coordinates around (0, 0)
     float dist = length(coord * 2.0); // Calculate distance in normalized device coordinates
 
-    // Define the thickness of the border
+    // Define the thickness of the border and size of the central dot
     float borderThickness = 0.1;
-
-    // Define the size of the blue dot in the center
     float dotSize = 0.2;
 
     if (dist > 1.0) {
         discard;  // Discard fragments outside the point's radius
     } else if (dist > (1.0 - borderThickness)) {
         // Blue border
-        gl_FragColor = v_color;  // Use the color passed from the vertex shader
+        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);  // Solid blue for the border
     } else if (dist < dotSize) {
         // Blue dot in the center
-        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);  // Blue color for the dot
+        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);  // Solid blue for the dot
     } else {
-        // Hollow inside (transparent)
-        discard;  // Make the inside of the shape transparent
+        discard;
     }
 
-    // Apply anti-aliasing to smooth edges
-    float edgeSoftness = 0.005; // Softens the edges
-    gl_FragColor.a *= smoothstep(1.0, 1.0 - edgeSoftness, dist);
+    // Smoothing edge transitions only at the very outer boundary
+    float edgeSoftness = 0.005;
+    if (dist > (1.0 - edgeSoftness)) {
+        float alpha = smoothstep(1.0, 1.0 - edgeSoftness, dist);
+        gl_FragColor.a *= alpha; // Smooth transition, but ensure full color coverage
+    }
 }

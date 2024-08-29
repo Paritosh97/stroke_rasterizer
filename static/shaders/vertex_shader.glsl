@@ -12,7 +12,6 @@ void main() {
     vec2 clipSpace = zeroToTwo - 1.0;
 
     gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
-    v_radius = a_radius / u_resolution.x;  // Adjust radius by resolution for consistent appearance
-    v_color = a_color;  // Pass the color to the fragment shader
+    v_radius = a_radius / u_resolution.x; // normalize
     gl_PointSize = a_radius * 2.0;
 }

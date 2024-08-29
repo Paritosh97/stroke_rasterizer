@@ -4,6 +4,9 @@ let isDrawing = false;
 let lastSample = null;
 let activeStrokeIndex = -1;
 let strokeEditingMode = false;
+let baseRadius = 5; // Default base radius
+let distanceThreshold = 100; // Default distance threshold
+let interpolationMode = 'points'; // Default interpolation mode
 
 function createShader(gl, type, source) {
     const shader = gl.createShader(type);
@@ -76,6 +79,22 @@ async function main() {
         render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
     });
 
+    // Update distance threshold when the slider is moved
+    const distanceThresholdSlider = document.getElementById('distanceThreshold');
+    const distanceThresholdValue = document.getElementById('distanceThresholdValue');
+    distanceThresholdSlider.addEventListener('input', (event) => {
+        distanceThreshold = parseInt(event.target.value, 10);
+        distanceThresholdValue.textContent = distanceThreshold;
+    });
+
+    // Update radius when the slider is moved
+    const radiusControl = document.getElementById('radiusControl');
+    const radiusValue = document.getElementById('radiusValue');
+    radiusControl.addEventListener('input', (event) => {
+        baseRadius = parseInt(event.target.value, 10);
+        radiusValue.textContent = baseRadius;
+    });
+
     canvas.addEventListener('pointerdown', (event) => {
         event.preventDefault();
         isDrawing = true;
@@ -97,29 +116,6 @@ async function main() {
         updateSampleList();
         render(gl, program, positionLocation, radiusLocation, resolutionLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
     });
-    
-    function calculateDistance(sample1, sample2) {
-        const dx = sample2.position[0] - sample1.position[0];
-        const dy = sample2.position[1] - sample1.position[1];
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-    
-    let distanceThreshold = 100; // Default value
-
-    // Update distance threshold when the slider is moved
-    const distanceThresholdSlider = document.getElementById('distanceThreshold');
-    const distanceThresholdValue = document.getElementById('distanceThresholdValue');
-
-    distanceThresholdSlider.addEventListener('input', (event) => {
-        distanceThreshold = parseInt(event.target.value, 10);
-        distanceThresholdValue.textContent = distanceThreshold;
-    });
-
-    function calculateDistance(sample1, sample2) {
-        const dx = sample2.position[0] - sample1.position[0];
-        const dy = sample2.position[1] - sample1.position[1];
-        return Math.sqrt(dx * dx + dy * dy);
-    }
 
     canvas.addEventListener('pointermove', (event) => {
         event.preventDefault();
@@ -162,7 +158,7 @@ async function main() {
     });    
 
     // Resize canvas to fit the window
-    canvas.width = window.innerWidth - 200; // Adjust for the debug menu
+    canvas.width = window.innerWidth - 250; // Adjust for the debug menu
     canvas.height = window.innerHeight;
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     gl.clearColor(1, 1, 1, 1);
@@ -180,10 +176,16 @@ function createSample(event, canvas) {
     // Use pressure from the pointer event if available, otherwise default to 1.0
     const pressure = event.pressure || 1.0;
 
-    // Set radius based on pressure (adjust the scaling factor as needed)
-    const radius = Math.min(50, 5 + pressure * 45);  // Scales pressure (0 to 1) to radius (5 to 50px)
+    // Set radius based on pressure and baseRadius (adjust the scaling factor as needed)
+    const radius = Math.min(50, baseRadius + pressure * (50 - baseRadius));  // Adjusted based on baseRadius
 
     return { position: [x, y], radius, color: 0xFF0000FF };
+}
+
+function calculateDistance(sample1, sample2) {
+    const dx = sample2.position[0] - sample1.position[0];
+    const dy = sample2.position[1] - sample1.position[1];
+    return Math.sqrt(dx * dx + dy * dy);
 }
 
 function interpolateSamples(sample1, sample2, numPoints) {
@@ -333,7 +335,6 @@ function catmullRomInterpolate(p0, p1, p2, p3, t) {
     ];
 }
 
-
 function interpolateStroke(stroke, numSegments) {
     const interpolatedPoints = [];
 
@@ -358,13 +359,14 @@ function interpolateStroke(stroke, numSegments) {
 
     return interpolatedPoints;
 }
+
 function renderInterpolatedCurve(gl, positionLocation, colorLocation, positionBuffer, colorBuffer) {
     const positions = [];
     const colors = [];
-    const color = [1.0, 0.0, 0.0, 1.0];
+    const color = [0.0, 0.0, 1.0, 1.0];  // Solid blue for the curve
 
     allStrokes.forEach((stroke, strokeIndex) => {
-        const interpolatedPoints = interpolateStroke(stroke, 20);
+        const interpolatedPoints = interpolateStroke(stroke, 250); // Higher number for smoother curve
 
         for (let i = 0; i < interpolatedPoints.length - 1; i++) {
             const currentPoint = interpolatedPoints[i];
@@ -501,5 +503,4 @@ function render(gl, program, positionLocation, radiusLocation, resolutionLocatio
         renderSamples(gl, positionLocation, radiusLocation, colorLocation, positionBuffer, radiusBuffer, colorBuffer);
     }
 }
-
 window.onload = main;
